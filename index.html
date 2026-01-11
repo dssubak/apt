@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>광주수박등위브</title>
+  <style>
+    :root{
+      --page-pad: 16px;
+      --site-title-size: 18px;
+
+      --dong-gap: 18px;
+
+      --cell-w: 92px;
+      --cell-h: 36px;
+      --cell-font: 14px;
+
+      --cell-gap-x: 10px;
+      --cell-gap-y: 10px;
+
+      /* 동 그룹 박스 */
+      --dong-border: 1px;
+      --dong-radius: 14px;
+      --dong-pad: 14px;
+    }
+
+    body{
+      margin: var(--page-pad);
+      font-family: system-ui, -apple-system, "Noto Sans KR", Segoe UI, Roboto, sans-serif;
+      background:#fff;
+      color:#000;
+    }
+
+    h1{
+      margin: 0 0 14px;
+      font-size: var(--site-title-size);
+      font-weight: 900;
+    }
+
+    /* 전체 동 배치 */
+    .all{
+      display: grid;
+      gap: var(--dong-gap);
+      grid-template-columns: 1fr;
+      align-items: start;
+    }
+    @media (min-width: 900px){ .all{ grid-template-columns: repeat(3, max-content); } }
+    @media (min-width: 1350px){ .all{ grid-template-columns: repeat(6, max-content); } }
+
+    /* ✅ 동별로 묶는 큰 사각형 */
+    .dongWrap{
+      border: var(--dong-border) solid #d9d9d9;
+      border-radius: var(--dong-radius);
+      padding: var(--dong-pad);
+      background: #fff;
+    }
+
+    .dongInner{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+    }
+
+    /* ✅ 동 이름: 상단 중앙, 사각형 없음 */
+    .dongLabel{
+      margin-bottom: 10px;
+      font-size: 18px;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1;
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+
+    /* 카드형 셀 배치 (table 유지 = 정렬 안정) */
+    table.grid{
+      border-collapse: separate;
+      border-spacing: var(--cell-gap-x) var(--cell-gap-y);
+      background:#fff;
+    }
+    table.grid td{
+      padding: 0;
+      width: var(--cell-w);
+      height: var(--cell-h);
+    }
+
+    .cell{
+      width: var(--cell-w);
+      height: var(--cell-h);
+      border: 1px solid #dcdcdc;
+      border-radius: 8px;
+      background: #fff;
+
+      display:flex;
+      align-items:center;
+      justify-content:center;
+
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+    }
+
+    /* ✅ 없는 칸은 숨김(자리 유지) */
+    .cell.na{
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .label{
+      font-size: var(--cell-font);
+      font-weight: 800;
+      letter-spacing: .2px;
+      white-space: nowrap;
+      color: #000; /* 배경색이 있어도 글씨는 검정 */
+    }
+
+    /* 상세 */
+    #detailView{ display:none; }
+    .detail{
+      border: 1px solid #000;
+      padding: 14px;
+      max-width: 520px;
+    }
+    .detail h2{ margin:0 0 10px; font-size: 18px; font-weight: 900; }
+    .kv{ display:grid; grid-template-columns: 90px 1fr; gap: 8px; }
+    .kv div{ border: 1px solid #000; padding: 8px 10px; }
+    .kv .k{ font-weight: 900; }
+    .btnbar{ display:flex; gap:10px; margin-top: 12px; flex-wrap:wrap; }
+    a.btn, button.btn{
+      border:1px solid #000;
+      background:#fff;
+      padding: 8px 10px;
+      cursor:pointer;
+      text-decoration:none;
+      color:#000;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>광주수박등위브</h1>
+
+  <section id="listView">
+    <div class="all" id="allBuildings"></div>
+  </section>
+
+  <section id="detailView">
+    <div class="detail">
+      <h2 id="detailTitle">세대 상세</h2>
+      <div class="kv">
+        <div class="k">동</div><div id="dDong"></div>
+        <div class="k">층</div><div id="dFloor"></div>
+        <div class="k">라인</div><div id="dLine"></div>
+        <div class="k">호수</div><div id="dUnit"></div>
+      </div>
+      <div class="btnbar">
+        <a class="btn" href="#list">← 돌아가기</a>
+        <button class="btn" id="copyBtn">복사</button>
+      </div>
+    </div>
+  </section>
+
+<script>
+const CONFIG = {
+  "101동": { lines: { 1:[2,20], 2:[2,20], 3:[2,20] } },
+  "102동": { lines: { 1:[2,20], 2:[2,20], 3:[2,20], 4:[2,20] } },
+  "103동": { lines: { 1:[1,20], 2:[1,20] } },
+  "104동": { lines: { 1:[2,12], 2:[2,12] } },
+  "105동": { lines: { 1:[1,20], 2:[1,20], 3:[2,19], 4:[2,18] } },
+  "106동": { lines: { 1:[1,18], 2:[1,18], 3:[1,15] } },
+};
+
+/* ✅ 동/라인별 색상표 */
+const COLOR_MAP = {
+  "101동": { 1: "#FFE26A", 2: "#B7F5A1", 3: "#B8D7FF" },                // 노랑, 초록, 파랑
+  "102동": { 1: "#B8D7FF", 2: "#B7F5A1", 3: "#B8D7FF", 4: "#FFB0B0" },  // 파랑, 초록, 파랑, 빨강
+  "103동": { 1: "#B8D7FF", 2: "#B8D7FF" },                               // 파랑, 파랑
+  "104동": { 1: "#FFE26A", 2: "#FFE26A" },                               // 노랑, 노랑
+  "105동": { 1: "#B8D7FF", 2: "#B7F5A1", 3: "#B8D7FF", 4: "#FFB0B0" },  // 파랑, 초록, 파랑, 빨강
+  "106동": { 1: "#B8D7FF", 2: "#D9D9D9", 3: "#B7F5A1" },                // 파랑, 회색, 초록
+};
+
+const listView = document.getElementById("listView");
+const detailView = document.getElementById("detailView");
+const allBuildingsEl = document.getElementById("allBuildings");
+
+const detailTitle = document.getElementById("detailTitle");
+const dDong = document.getElementById("dDong");
+const dFloor = document.getElementById("dFloor");
+const dLine = document.getElementById("dLine");
+const dUnit = document.getElementById("dUnit");
+const copyBtn = document.getElementById("copyBtn");
+
+function makeUnit(floor, line){
+  return (floor * 100 + Number(line)).toString();
+}
+function computeRanges(dong){
+  const linesObj = CONFIG[dong].lines;
+  const lines = Object.keys(linesObj).map(Number).sort((a,b)=>a-b);
+  let minFloor = Infinity, maxFloor = -Infinity;
+  for (const ln of lines){
+    const [s,e] = linesObj[ln];
+    minFloor = Math.min(minFloor, s);
+    maxFloor = Math.max(maxFloor, e);
+  }
+  return { lines, minFloor, maxFloor };
+}
+function exists(dong, floor, line){
+  const r = CONFIG[dong].lines[line];
+  if (!r) return false;
+  const [s,e] = r;
+  return floor >= s && floor <= e;
+}
+
+/* 단지 전체 기준: 최소층 1층, 최대층은 전체 동 중 최댓값 */
+function getGlobalMinMax(){
+  let globalMax = -Infinity;
+  for (const dong of Object.keys(CONFIG)){
+    const { maxFloor } = computeRanges(dong);
+    globalMax = Math.max(globalMax, maxFloor);
+  }
+  return { globalMin: 1, globalMax };
+}
+
+/* ✅ 동/라인에 맞는 셀 색 가져오기 */
+function getCellColor(dong, line){
+  const m = COLOR_MAP[dong];
+  return (m && m[line]) ? m[line] : "#FFFFFF";
+}
+
+function goList(){
+  listView.style.display = "";
+  detailView.style.display = "none";
+}
+function goDetail(dong, floor, line){
+  const unit = makeUnit(floor, line);
+  location.hash = `unit=${encodeURIComponent(dong.replace("동",""))}-${unit}`;
+}
+function parseHash(){
+  const h = location.hash.replace(/^#/, "");
+  if (!h || h === "list") return { view: "list" };
+
+  const m = h.match(/^unit=([^]+)$/);
+  if (!m) return { view: "list" };
+
+  const val = decodeURIComponent(m[1]); // "101-1503"
+  const mm = val.match(/^(\d+)-(\d+)$/);
+  if (!mm) return { view: "list" };
+
+  const dong = `${mm[1]}동`;
+  const unit = mm[2];
+  const n = Number(unit);
+  const floor = Math.floor(n / 100);
+  const line = n % 100;
+
+  return { view:"detail", dong, unit, floor, line };
+}
+
+function renderOneBuilding(dong){
+  const { lines } = computeRanges(dong);
+  const cols = lines.length;
+  const { globalMin, globalMax } = getGlobalMinMax();
+
+  const wrap = document.createElement("div");
+  wrap.className = "dongWrap";
+
+  const inner = document.createElement("div");
+  inner.className = "dongInner";
+
+  const label = document.createElement("div");
+  label.className = "dongLabel";
+  label.textContent = dong;
+
+  const table = document.createElement("table");
+  table.className = "grid";
+  const tbody = document.createElement("tbody");
+
+  /* 1층이 아래로: 위는 고층, 아래는 1층 */
+  for (let f = globalMax; f >= globalMin; f--){
+    const tr = document.createElement("tr");
+
+    for (const ln of lines){
+      const td = document.createElement("td");
+      const ok = exists(dong, f, ln);
+
+      const cell = document.createElement("div");
+      cell.className = "cell" + (ok ? "" : " na");
+
+      if (!ok){
+        cell.innerHTML = `<div class="label">&nbsp;</div>`;
+      } else {
+        const unit = makeUnit(f, ln);
+        cell.innerHTML = `<div class="label">${unit}</div>`; // ✅ 호수만 표시
+
+        /* ✅ 여기서 색 적용 */
+        cell.style.background = getCellColor(dong, ln);
+
+        cell.addEventListener("click", () => goDetail(dong, f, ln));
+      }
+
+      td.appendChild(cell);
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+
+  /* 라벨 폭 */
+  label.style.width = `calc(var(--cell-w) * ${cols} + var(--cell-gap-x) * ${Math.max(0, cols-1)})`;
+
+  inner.appendChild(label);
+  inner.appendChild(table);
+  wrap.appendChild(inner);
+
+  return wrap;
+}
+
+function renderAll(){
+  allBuildingsEl.innerHTML = "";
+  const dongs = Object.keys(CONFIG).sort((a,b)=>a.localeCompare(b,"ko"));
+  for (const d of dongs){
+    allBuildingsEl.appendChild(renderOneBuilding(d));
+  }
+}
+
+function renderDetail(dong, floor, line, unit){
+  if (!CONFIG[dong]) { location.hash = "list"; return; }
+  if (!exists(dong, floor, line)) { location.hash = "list"; return; }
+
+  listView.style.display = "none";
+  detailView.style.display = "";
+
+  detailTitle.textContent = `${dong} ${unit}`;
+  dDong.textContent = dong;
+  dFloor.textContent = `${floor}층`;
+  dLine.textContent = `${line}호라인`;
+  dUnit.textContent = unit;
+
+  copyBtn.onclick = async () => {
+    const text = `${dong} ${unit}`;
+    try{
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = "복사됨!";
+      setTimeout(()=> copyBtn.textContent = "복사", 900);
+    } catch {
+      alert("복사가 막혀있어요: " + text);
+    }
+  };
+}
+
+function syncFromHash(){
+  const state = parseHash();
+  if (state.view === "list"){
+    goList();
+    renderAll();
+    return;
+  }
+  renderAll();
+  renderDetail(state.dong, state.floor, state.line, state.unit);
+}
+
+window.addEventListener("hashchange", syncFromHash);
+if (!location.hash) location.hash = "list";
+syncFromHash();
+</script>
+
+</body>
+</html>
